@@ -1,23 +1,6 @@
+const { Pool } = require('pg');
 const properties = require("./json/properties.json");
 const users = require("./json/users.json");
-
-// test the connection
-const { Pool } = require('pg');
-const pool = new Pool({
-  user: 'labber',
-  password: '123',
-  host: 'localhost',
-  database: 'lightbnb',
-  port: 5432
-});
-
-pool.connect(() => {
-  console.log('Connected to the database!');
-
-  pool.query(`SELECT title FROM properties LIMIT 10;`).then(response => {console.log(response)})
-
-});
-
 
 /// Users
 
@@ -77,13 +60,49 @@ const getAllReservations = function (guest_id, limit = 10) {
  * @param {*} limit The number of results to return.
  * @return {Promise<[{}]>}  A promise to the properties.
  */
-const getAllProperties = function (options, limit = 10) {
-  const limitedProperties = {};
-  for (let i = 1; i <= limit; i++) {
-    limitedProperties[i] = properties[i];
+
+// Refactored getAllProperties function 
+const getAllProperties = function(options, limit = 10) {
+  const queryParams = [];
+  let queryString = `
+    SELECT *
+    FROM properties
+    `;
+  
+  if (options.owner_id) {
+    queryParams.push(options.owner_id);
+    queryString += `WHERE owner_id = $${queryParams.length} `;
   }
-  return Promise.resolve(limitedProperties);
+
+  if (options.minimum_price_per_night) {
+    queryParams.push(options.minimum_price_per_night * 100);
+    if (queryParams.length > 1) {
+      queryString += `AND cost_per_night >= $${queryParams.length} `;
+    } else {
+      queryString += `WHERE cost_per_night >= $${queryParams.length} `;
+    }
+  }
+
+  if (options.maximum_price_per_night) {
+    queryParams.push(options.maximum_price_per_night * 100);
+    if (queryParams.length > 1) {
+      queryString += `AND cost_per_night <= $${queryParams.length} `;
+    } else {
+      queryString += `WHERE cost_per_night <= $${queryParams.length} `;
+    }
+  }
+
+  queryString += `
+    ORDER BY cost_per_night
+    LIMIT $1
+  `;
+  queryParams.push(limit);
+
+  return pool.query(queryString, queryParams)
+    .then(res => res.rows)
+    .catch(err => console.log(err.message));
 };
+
 
 /**
  * Add a property to the database
@@ -104,5 +123,5 @@ module.exports = {
   getAllReservations,
   getAllProperties,
   addProperty,
-  pool,
+
 };
