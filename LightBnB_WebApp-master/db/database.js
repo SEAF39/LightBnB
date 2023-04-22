@@ -2,6 +2,13 @@ const { Pool } = require('pg');
 const properties = require("./json/properties.json");
 const users = require("./json/users.json");
 
+const pool = new Pool({
+  user: 'labber',
+  password: '123',
+  host: 'localhost',
+  database: 'lightbnb'
+});
+
 /// Users
 
 /**
@@ -10,15 +17,17 @@ const users = require("./json/users.json");
  * @return {Promise<{}>} A promise to the user.
  */
 const getUserWithEmail = function (email) {
-  let resolvedUser = null;
-  for (const userId in users) {
-    const user = users[userId];
-    if (user?.email.toLowerCase() === email?.toLowerCase()) {
-      resolvedUser = user;
-    }
-  }
-  return Promise.resolve(resolvedUser);
+  const queryString = `
+    SELECT *
+    FROM users
+    WHERE email = $1;
+  `;
+  const values = [email];
+  return pool.query(queryString, values)
+    .then(res => res.rows[0])
+    .catch(err => console.error('Error executing query', err.stack));
 };
+
 
 /**
  * Get a single user from the database given their id.
@@ -26,19 +35,31 @@ const getUserWithEmail = function (email) {
  * @return {Promise<{}>} A promise to the user.
  */
 const getUserWithId = function (id) {
-  return Promise.resolve(users[id]);
+  const queryString = `
+    SELECT *
+    FROM users
+    WHERE id = $1;
+  `;
+  const values = [id];
+  return pool.query(queryString, values)
+    .then(res => res.rows[0])
+    .catch(err => console.error('Error executing query', err.stack));
 };
+
 
 /**
  * Add a new user to the database.
  * @param {{name: string, password: string, email: string}} user
  * @return {Promise<{}>} A promise to the user.
  */
-const addUser = function (user) {
-  const userId = Object.keys(users).length + 1;
-  user.id = userId;
-  users[userId] = user;
-  return Promise.resolve(user);
+const addUser = function(user) {
+  return pool.query(`
+    INSERT INTO users (name, email, password)
+    VALUES ($1, $2, $3)
+    RETURNING *
+  `, [user.name, user.email, user.password])
+    .then(res => res.rows[0])
+    .catch(err => console.log(err.message));
 };
 
 /// Reservations
@@ -49,7 +70,20 @@ const addUser = function (user) {
  * @return {Promise<[{}]>} A promise to the reservations.
  */
 const getAllReservations = function (guest_id, limit = 10) {
-  return getAllProperties(null, 2);
+  const queryString = `
+    SELECT reservations.*, properties.*, avg(property_reviews.rating) as average_rating
+    FROM reservations
+    JOIN properties ON reservations.property_id = properties.id
+    JOIN property_reviews ON properties.id = property_reviews.property_id
+    WHERE reservations.guest_id = $1 AND reservations.end_date < now()::date
+    GROUP BY reservations.id, properties.id
+    ORDER BY reservations.start_date
+    LIMIT $2;
+  `;
+  const values = [guest_id, limit];
+  return pool.query(queryString, values)
+    .then(res => res.rows)
+    .catch(err => console.error('Error executing query', err.stack));
 };
 
 /// Properties
@@ -60,6 +94,7 @@ const getAllReservations = function (guest_id, limit = 10) {
  * @param {*} limit The number of results to return.
  * @return {Promise<[{}]>}  A promise to the properties.
  */
+
 
 // Refactored getAllProperties function 
 const getAllProperties = function(options, limit = 10) {
