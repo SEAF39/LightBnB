@@ -1,6 +1,5 @@
 const { Pool } = require('pg');
 const properties = require("./json/properties.json");
-const users = require("./json/users.json");
 
 const pool = new Pool({
   user: 'labber',
@@ -70,19 +69,24 @@ const addUser = function(user) {
  * @return {Promise<[{}]>} A promise to the reservations.
  */
 const getAllReservations = function (guest_id, limit = 10) {
-  const query = `
-    SELECT reservations.*, properties.*, AVG(property_reviews.rating) as average_rating
+  const queryString = `
+    SELECT properties.*, reservations.*, avg(rating) as average_rating
     FROM reservations
     JOIN properties ON reservations.property_id = properties.id
     JOIN property_reviews ON properties.id = property_reviews.property_id
-    WHERE reservations.guest_id = $1 AND reservations.end_date < now()::date
-    GROUP BY reservations.id, properties.id
+    WHERE reservations.guest_id = $1
+    AND reservations.end_date < now()::date
+    GROUP BY properties.id, reservations.id
     ORDER BY reservations.start_date
     LIMIT $2;
   `;
-  const values = [guest_id, limit];
-  return pool.query(query, values)
-    .then(res => res.rows);
+  const queryParams = [guest_id, limit];
+
+  // Run query on database
+  return pool
+    .query(queryString, queryParams)
+    .then((result) => result.rows) // Return array of reservation objects from query
+    .catch((error) => console.log(error.message)); // If query is wrong or database issues (ex. wrong creditials)
 };
 
 /// Properties
