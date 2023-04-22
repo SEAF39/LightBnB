@@ -70,8 +70,8 @@ const addUser = function(user) {
  * @return {Promise<[{}]>} A promise to the reservations.
  */
 const getAllReservations = function (guest_id, limit = 10) {
-  const queryString = `
-    SELECT reservations.*, properties.*, avg(property_reviews.rating) as average_rating
+  const query = `
+    SELECT reservations.*, properties.*, AVG(property_reviews.rating) as average_rating
     FROM reservations
     JOIN properties ON reservations.property_id = properties.id
     JOIN property_reviews ON properties.id = property_reviews.property_id
@@ -81,9 +81,8 @@ const getAllReservations = function (guest_id, limit = 10) {
     LIMIT $2;
   `;
   const values = [guest_id, limit];
-  return pool.query(queryString, values)
-    .then(res => res.rows)
-    .catch(err => console.error('Error executing query', err.stack));
+  return pool.query(query, values)
+    .then(res => res.rows);
 };
 
 /// Properties
