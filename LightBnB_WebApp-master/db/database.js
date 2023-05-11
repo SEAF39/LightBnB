@@ -1,9 +1,10 @@
+/* database.js */
 const { Pool } = require('pg');
 const properties = require("./json/properties.json");
 
 const pool = new Pool({
   user: 'labber',
-  password: '123',
+  password: 'labber',
   host: 'localhost',
   database: 'lightbnb'
 });
@@ -109,48 +110,41 @@ const getAllProperties = function(options, limit = 10) {
   SELECT properties.*, avg(property_reviews.rating) as average_rating
   FROM properties
   JOIN property_reviews ON properties.id = property_reviews.property_id
-  WHERE owner_id = $1
-  GROUP BY properties.id
-  ORDER BY cost_per_night
-  LIMIT $2;
-  
+  where 1 = 1
   `;
 
   // 3. Add any filters that the user passed in to the queryParams array and build the WHERE clause accordingly.
   let whereClause = '';
   if (options.city) {
     queryParams.push(`%${options.city}%`);
-    whereClause += `WHERE city LIKE $${queryParams.length} `;
+    queryString += `AND city LIKE $${queryParams.length} `;
   }
   if (options.owner_id) {
     queryParams.push(options.owner_id);
-    whereClause += `${whereClause.length > 0 ? 'AND' : 'WHERE'} owner_id = $${queryParams.length} `;
+    queryString += `AND owner_id = $${queryParams.length} `;
   }
   if (options.minimum_price_per_night) {
     queryParams.push(options.minimum_price_per_night);
-    whereClause += `${whereClause.length > 0 ? 'AND' : 'WHERE'} cost_per_night >= $${queryParams.length} `;
+    queryString += `AND cost_per_night >= $${queryParams.length} `;
   }
   if (options.maximum_price_per_night) {
     queryParams.push(options.maximum_price_per_night);
-    whereClause += `${whereClause.length > 0 ? 'AND' : 'WHERE'} cost_per_night <= $${queryParams.length} `;
+    queryString += `AND cost_per_night <= $${queryParams.length} `;
   }
+  
+  queryString += `
+      GROUP BY properties.id
+    `;
+
   if (options.minimum_rating) {
     queryParams.push(options.minimum_rating);
-    whereClause += `${whereClause.length > 0 ? 'AND' : 'WHERE'} property_reviews.rating >= $${queryParams.length} `;
-    queryString += `
-      GROUP BY properties.id
-      HAVING avg(property_reviews.rating) >= $${queryParams.length}
-    `;
-  } else {
-    queryString += `
-      GROUP BY properties.id
-    `;
+    queryString += `HAVING avg(property_reviews.rating) >= $${queryParams.length} `;
+        
   }
 
   // 4. Add any query that comes after the WHERE clause.
   queryParams.push(limit);
   queryString += `
-    ${whereClause}
     ORDER BY cost_per_night
     LIMIT $${queryParams.length};
   `;
@@ -172,13 +166,9 @@ const getAllProperties = function(options, limit = 10) {
  */
 const addProperty = function(property) {
   const queryString = `
-  SELECT properties.*, avg(property_reviews.rating) as average_rating
-  FROM properties
-  JOIN property_reviews ON properties.id = property_reviews.property_id
-  WHERE owner_id = $1
-  GROUP BY properties.id
-  ORDER BY cost_per_night
-  LIMIT $2;
+  INSERT INTO properties (
+    title, description, owner_id, cover_photo_url, thumbnail_photo_url, cost_per_night, parking_spaces, number_of_bathrooms, number_of_bedrooms, active, province, city, country, street, post_code) 
+  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, true, $10, $11, $12, $13, $14)
   `;
 
   const queryParams = [property.owner_id, property.title, property.description, property.thumbnail_photo_url, property.cover_photo_url, property.cost_per_night, property.street, property.city, property.province, property.post_code, property.country, property.parking_spaces, property.number_of_bathrooms, property.number_of_bedrooms]; 
